@@ -1,0 +1,13 @@
+# Configuration /etc/filebeat/filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/rabbitmq/*.log
+  fields:
+    service: rabbitmq
+    node: rabbit-node-1  # Adapter selon le nœud (rabbit-node1 ,rabbit-node2, rabbit-node3)
+  fields_under_root: true
+
+output.logstash:
+  hosts: ["192.168.59.1:5044"]  # IP Docker

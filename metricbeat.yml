@@ -1,0 +1,36 @@
+# Configuration /etc/metricbeat/metricbeat.yml
+metricbeat.modules:
+- module: system
+  metricsets: ["cpu", "memory", "network", "diskio"]
+  enabled: true
+  period: 30s
+
+- module: rabbitmq
+  metricsets: ["node", "queue", "connection","exchange", "channels"]
+  enabled: true
+  period: 30s
+  hosts: ["192.168.59.100:15673"]  # Management API local (VIP)
+  username: nzhinusoft
+  password: nzhinusoft
+
+output.logstash:
+  hosts: ["192.168.0.105:5044"]  # IP de votre serveur ELK
+
+fields_under_root: true
+fields:
+  environment: dev
+  cluster: rabbitmq-dev
+  node_name: rabbit-node1  # Adapter selon le nœud
+
+# monitoring interne
+monitoring.enabled: true
+monitoring.cluster_uuid: "rabbitmq-dev"
+
+# logging
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/metricbeat
+  name: metricbeat
+  keepfiles: 7
+  permissions: 0644

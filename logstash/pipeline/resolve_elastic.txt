@@ -1,0 +1,39 @@
+"the node is above the high watermark cluster setting [cluster.routing.allocation.disk.watermark.high=90%], having less than the minimum required [34.7gb] free space, actual free: [32.7gb], actual used: [90.5%]"
+run:
+
+step 1: curl -X GET "localhost:9200/_cluster/allocation/explain?pretty"
+
+
+
+
+curl -X PUT "localhost:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "transient": {
+    "cluster.routing.allocation.disk.watermark.low": "95%",
+    "cluster.routing.allocation.disk.watermark.high": "98%",
+    "cluster.routing.allocation.disk.watermark.flood_stage": "99%",
+    "cluster.info.update.interval": "1m"
+  }
+}'
+
+
+si le status d'elasticsearch est à yellow
+
+curl -X PUT "localhost:9200/.kibana_task_manager_8.13.2_001/_settings" -H 'Content-Type: application/json' -d'
+{
+  "index": {
+    "number_of_replicas": 0
+  }
+}'
+
+get elasticsearch status
+# curl -X GET localhost:9200/_cluster/health?pretty
+
+list matching indeces elasticsearch
+
+curl -s "localhost:9200/_cat/indices?v" 
+
+
+-# avoir les donnés de l'index: logstash-2025.08.01
+ curl -X GET "localhost:9200/logstash-2025.08.01/_search?pretty" -H 'Content-Type: application/json' -d'{ "size": 1, "sort": [ { "@timestamp": "desc" } ]}
+'

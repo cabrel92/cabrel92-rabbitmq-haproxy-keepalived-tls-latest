@@ -1,0 +1,500 @@
+2  sudo rabbitmq-plugins enable rabbitmq_management
+    3  sudo systemctl restart rabbitmq-server
+    4  rabbitmqctl status | grep RabbitMQ
+    5  sudo systemctl stop rabbitmq-server
+    6  sudo systemctl restart rabbitmq-server
+    7  exit
+    8  history 
+    9  systemctl status keepalived
+   10  rabbitmqctl list_feature_flags
+   11  rabbitmqctl enable_feature_flag all
+   12  exit
+   13  rabbitmqctl enable_feature_flag all
+   14  rabbitmqctl list_feature_flags
+   15  exit
+   16  sudo systemctl status metricbeat
+   17  sudo apt-get install -y metricbeat
+   18  sudo systemctl enable metricbeat
+   19  sudo systemctl start metricbeat
+   20  apt-get update
+   21  sudo apt-get install -y metricbeat
+   22  sudo apt-get install -y filebeat
+   23  wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-8.14.0-amd64.deb
+   24  wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-8.14.0-amd64.deb
+   25  sudo dpkg -i filebeat-8.14.0-amd64.deb
+   26  sudo dpkg -i metricbeat-8.14.0-amd64.deb
+   27  sudo apt-get install -f
+   28  sudo systemctl enable filebeat
+   29  sudo systemctl start filebeat
+   30  sudo systemctl start filebeat
+   31  sudo systemctl enable filebeat
+   32  sudo systemctl status filebeat
+   33  sudo nano /etc/filebeat/filebeat.yml
+   34  exit
+   35  rabbitmqctl enable rabbitmq_top
+   36  rabbitmqctl enable_feature_flag  rabbitmq_top
+   37  rabbitmq-diagnotics -q ping
+   38  rabbitmq-diagnostics -q ping
+   39  rabbitmq-diagnostics status
+   40  rabbitmq-diagnostics -q status
+   41  rabbitmq-diagnostics -q alarms
+   42  rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms
+   43  rabbitmq-diagnostics -q memory_breakdown --unit "MB"
+   44  rabbitmq-diagnotics -q listerners --node rabbit@rabbit-node2
+   45  rabbitmq-diagnostics -q listerners --node rabbit@rabbit-node2
+   46  rabbitmq-diagnostics -q listeners --node rabbit@rabbit-node2
+   47  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node3 --address 1923.168.59.42
+   48  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node3 --address 1923.168.59.43
+   49  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node3 --address 192.168.59.43
+   50  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node1 --address 192.168.59.43
+   51  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node1 --address 192.168.59.41
+   52  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node1 --address 192.168.59.40
+   53  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node1 --address 192.168.59.42
+   54  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node1 --address 192.168.59.41
+   55  rabbitmq-diagnostics -q check_port_connectivity --node rabbit@rabbit-node2 --address 192.168.59.41
+   56  rabbitmq-diagnostics -q check_virtual_hosts --node rabbit@rabbit-node2
+   57  rabbitmq-diagnostics -q check_virtual_hosts --node rabbit@rabbit-node3
+   58  rabbitmq-diagnostics node_health_check
+   59  rabbitmq-diagnostics -q cluster_status
+   60  rabbitmq-diagnostics -q set_cluster_name rabbitmq-clustering
+   61  rabbitmq-diagnostics -q set_cluster_name rabbitmq-clustering
+   62  rabbitmq-diagnostics -q cluster_status
+   63   rabbitmq-diagnostics -q cluster_status | grep name
+   64  rabbitmq-plugins enable rabbitmq_prometheus
+   65  rabbitmq-plugins list
+   66  rabbitmq-diagnostics environment | grep collect_statistics_interval
+   67  rabbitmq-diagnostics -s listeners
+   68  rabbitmq-diagnostics memory_breakdown
+   69  systemctl status firebeat
+   70  apt-get install firebeat
+   71  apt-get update
+   72  apt-get install firebeat
+   73  apt install filebeat
+   74  systemctl status filebeat
+   75  mv /etc/filebeat/filebeat.yml /etc/filebeat/old-filebeat.yml
+   76  nano /etc/filebeat/filebeat.yml
+   77  systemctl restart filebeat
+   78  systemctl status filebeat
+   79  nano /etc/filebeat/filebeat.yml
+   80  systemctl restart filebeat
+   81  systemctl status filebeat
+   82  systemctl restart filebeat
+   83  systemctl status filebeat
+   84  exit
+   85  systemctl status rabbitmq-server
+   86  systemctl status haproxy
+   87  systemctl stop rabbitmq-server
+   88  systemctl restart rabbitmq-server
+   89  systemctl stop rabbitmq-server
+   90  systemctl restart rabbitmq-server
+   91  nano /etc/keepalived/keepalived.conf
+   92  nano /etc/keepalived/chk_haproxy.sh
+   93  systemctl stop rabbitmq-server
+   94  systemctl restart rabbitmq-server
+   95  sudo filebeat modules enable system
+   96  nano /etc/filebeat/filebeat.yml 
+   97  sudo filebeat modules enable system
+   98  sudo filebeat modules enable rabbitmq
+   99  sudo filebeat modules list
+  100  sudo nano /etc/filebeat/modules.d/rabbitmq.yml
+  101  nano /etc/filebeat/modules.d/rabbitmq.yml
+  102  sudo systemctl restart filebeat
+  103  sudo filebeat test output
+  104  sudo journalctl -u filebeat -f
+  105  systemctl status filebeat
+  106  sudo journalctl -u filebeat -f
+  107  sudo filebeat modules disable system
+  108  sudo filebeat modules enable system
+  109  sudo sed -i 's/enabled: false/enabled: true/' /etc/filebeat/modules.d/system.yml
+  110  sudo systemctl restart filebeat
+  111  sudo systemctl status filebeat
+  112  sudo filebeat test output
+  113  sudo journalctl -u filebeat -f
+  114  sudo journalctl -u filebeat -f
+  115  systemctl stop rabbitmq-server
+  116  systemctl start rabbitmq-server
+  117  nano /etc/filebeat/filebeat.yml 
+  118  telnet 192.168.0.105 5044
+  119  cat  /etc/filebeat/filebeat.yml 
+  120  telnet 192.168.0.105 5044
+  121  sudo journalctl -u filebeat -f
+  122  systemctl status metricbeat
+  123  systemctl restart metricbeat
+  124  systemctl status metricbeat
+  125  metricbeat modules enable rabbitmq
+  126  metricbeat modules list
+  127  cat /etc/filebeat/filebeat.yml 
+  128  nano /etc/metricbeat/metricbeat.yml 
+  129  mv  /etc/metricbeat/metricbeat.yml  /etc/metricbeat/reference-metricbeat.yml 
+  130  nano /etc/metricbeat/metricbeat.yml 
+  131  nano /etc/metricbeat/metricbeat.yml 
+  132  nano /etc/metricbeat/metricbeat.yml 
+  133  nano /etc/metricbeat/metricbeat.yml 
+  134  metricbeat test modules rabbitmq
+  135  nano /etc/metricbeat/metricbeat.yml 
+  136  metricbeat test modules rabbitmq
+  137  metricbeat test modules rabbitmq
+  138  metricbeat test output
+  139  metricbeat test modules
+  140  sudo journalctl -u metricbeat -f
+  141  nano /etc/metricbeat/metricbeat.yml
+  142  cat /etc/metricbeat/metricbeat.yml
+  143  metricbeat test config -c /etc/metricbeat/metricbeat.yml
+  144  metricbeat modules list
+  145  cat /etc/metricbeat/metricbeat.yml
+  146  nano  /etc/metricbeat/metricbeat.yml
+  147  sudo find /etc/metricbeat/modules.d/ -type f -name "*.yml" -exec sudo mv {} {}.disabled \;
+  148  sudo systemctl restart metricbeat
+  149  nano  /etc/metricbeat/metricbeat.yml
+  150  systemctl restart metricbeat
+  151  metricbeat test modules
+  152  curl -u nzhinusoft:nzhinusoft http://192.168.59.100:15673/api/overview
+  153  sudo netstat -tulpen | grep 1567
+  154  netstat -tulpen | grep 1567
+  155  apt install netstat
+  156  apt-get update
+  157  apt-get install netstat
+  158  curl http://192.168.59.100:15672/api/overview
+  159  curl http://192.168.59.100:15672/api/overview
+  160  curl http://192.168.59.100:15673/api/overview
+  161  sudo systemctl restart metricbeat
+  162  qjournalctl -u metricbeat -n 100 --no-pager
+  163  journalctl -u metricbeat -n 100 --no-pager
+  164  journalctl -u metricbeat.service -n 50 --no-pager
+  165  sudo metricbeat test config
+  166  sudo metricbeat -e -d "*"
+  167  nano  /etc/metricbeat/metricbeat.yml
+  168  les
+  169  ls
+  170  cd /etc
+  171  ls
+  172  cd metricbeat
+  173  ls
+  174  nano metricbeat.yml
+  175  journalctl -u metricbeat -n 50 --no-pager
+  176  metricbeat modules list
+  177  metricbeat modules enable rabbitmq
+  178  metricbeat modules list
+  179  metricbeat modules enable rabbitmq
+  180  metricbeat test output
+  181  metricbeat test modules
+  182  nano metricbeat.yml
+  183  systemctl status metricbeat
+  184  tail -n /var/log/metricbeat/metricbeat-20250801-26.ndjson
+  185  cd /var/log
+  186  cd metricbeat
+  187  ls
+  188  tail -n 20 metricbeat-20250801-31.ndjson
+  189  rabbitmq-plugins list 
+  190  rabbitmqctl add_user metricbeat metricbeat
+  191  rabbitmqctl set_permissions -p / metricbeat ".*" ".*" ".*"
+  192  rabbitmqctl set_user_tags metricbeat monitoring
+  193  sudo metricbeat test output
+  194  metricbeat test modules
+  195  nano /etc/metricbeat/metricbeat.yml
+  196  systemctl restart metricbeat
+  197  systemctl status metricbeat
+  198  ls
+  199  tail -n 50 metricbeat-20250801-38.ndjson
+  200  sudo systemctl restart metricbeat
+  201  tail -n 50 metricbeat-20250801-38.ndjson
+  202  tail -n 50 metricbeat-20250801-38.ndjson
+  203  tail -n 50 metricbeat-20250801-38.ndjson
+  204  tail -n 50 metricbeat-20250801-38.ndjson
+  205  tail -n 50 metricbeat-20250801-38.ndjson
+  206  sudo systemctl restart metricbeat
+  207  nano /etc/metricbeat/metricbeat.yml
+  208  cat /etc/metricbeat/metricbeat.yml
+  209  cat /etc/metricbeat/metricbeat.yml
+  210  nano /etc/metricbeat/metricbeat.yml
+  211  nano /etc/metricbeat/metricbeat.yml
+  212  sudo systemctl daemon-reexec
+  213  sudo systemctl restart metricbeat
+  214  sudo systemctl status metricbeat
+  215  metricbeat test output
+  216  metricbeat test modules
+  217  rabbitmqctl set_user_tags metricbeat monitoring
+  218  rabbitmqctl set_permissions -p / metricbeat ".*" ".*" ".*"
+  219  rabbitmqctl list_users
+  220  nano /etc/metricbeat/metricbeat.yml
+  221  rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management
+  222  sudo systemctl restart metricbeat
+  223  sudo metricbeat modules disable elasticsearch-xpack
+  224  sudo systemctl status metricbeat
+  225  tail -n 50 metricbeat-20250801-39.ndjson
+  226  tail -n 50 metricbeat-20250801-38.ndjson
+  227  ls
+  228  tail -n 50 metricbeat-20250801-53.ndjson
+  229  ls
+  230  tail -n 50 metricbeat-20250801-53.ndjson
+  231  sudo systemctl restart metricbeat
+  232  tail -n 50 metricbeat-20250801-53.ndjson
+  233  ls
+  234  tail -n 50 metricbeat-20250801-54.ndjson
+  235  tail -n 50 metricbeat-20250801-54.ndjson
+  236  tail -n 50 metricbeat-20250801-54.ndjson
+  237  tail -n 50 metricbeat-20250801-54.ndjson
+  238  tail -n 50 metricbeat-20250801-54.ndjson
+  239  tail -n 50 metricbeat-20250801-54.ndjson
+  240  tail -n 50 metricbeat-20250801-54.ndjson
+  241  tail -n 50 metricbeat-20250801-54.ndjson
+  242  tail -n 50 metricbeat-20250801-54.ndjson
+  243  tail -n 50 metricbeat-20250801-54.ndjson
+  244  tail -n 50 metricbeat-20250801-54.ndjson
+  245  sudo rabbitmqctl set_user_tags metricbeat monitoring
+  246  sudo rabbitmqctl list_users
+  247  sudo rabbitmqctl set_permissions -p / metricbeat ".*" ".*" ".*"
+  248  tail -n 50 metricbeat-20250801-54.ndjson
+  249  rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management
+  250  cd /etc/metribeat
+  251  cd /etc/metricbeat
+  252  ls
+  253  nano metricbeat
+  254  nano metricbeat.yml
+  255  systemctl restart metricbeat
+  256  systemctl status metricbeat
+  257  tail -n 50 metricbeat-20250801-55.ndjson
+  258  cd /var/log/metricbeat
+  259  ls
+  260  tail -n 50  metricbeat-20250801-55.ndjson
+  261  cd /etc/metricbeat
+  262  nano metricbeat.yml
+  263  systemctl restart metricbeat
+  264  systemctl status metricbeat
+  265  cd /var/log/metricbeat
+  266  ls
+  267  tail -n 60 metricbeat-20250801-60.ndjson
+  268  tail -n 60 metricbeat-20250801-60.ndjson
+  269  tail -n 60 metricbeat-20250801-60.ndjson
+  270  tail -n 60 metricbeat-20250801-60.ndjson
+  271  tail -n 60 metricbeat-20250801-60.ndjson
+  272  tail -n 60 metricbeat-20250801-60.ndjson
+  273  tail -n 60 metricbeat-20250801-60.ndjson
+  274  cd /var/log/metricbeat
+  275  cd /etc/metricbeat
+  276  nano metricbeat.yml
+  277  systemctl restart metricbeat
+  278  cd /var/log/metricbeat
+  279  ls
+  280  tail -n 60 metricbeat-20250801-61.ndjson
+  281  exit
+  282  systemctl status rabbitmq-server
+  283  exit
+  284  systemctl stop rabbitmq-server
+  285  rabbitmqctl set_policy balanced-quorum "quorum-test-.*"   '{"queue-leader-locator":"balanced"}' --apply-to queues
+  286  systemctl restart rabbitmq-server
+  287  systemctl status rabbitmq-server
+  288  rabbitmqctl set_policy balanced-quorum "quorum-test-.*"   '{"queue-leader-locator":"balanced"}' --apply-to queues
+  289  systemctl status rabbitmq-server
+  290  systemctl restart rabbitmq-server
+  291  journalctl -u rabbitmq-server 
+  292  journalctl -u rabbitmq-server  --n 120 --no-parger
+  293  journalctl -u rabbitmq-server  -n 120 --no-parger
+  294  systemctl stop rabbitmq-server
+  295  journalctl -u rabbitmq-server  -n 120 --no-parger
+  296  journalctl -u rabbitmq-server 
+  297  journalctl -u rabbitmq-server rabbitmqctl set_policy balanced-quorum "quorum-test-.*"   '{"queue-leader-locator":"balanced"}' --apply-to queues
+  298  systemctl status rabbitmq-server
+  299  journalctl -u rabbitmq-server  -n 10 --no-parger
+  300  journalctl -u rabbitmq-server  -n 10 --no-pager
+  301  journalctl -u rabbitmq-server  -n 500 --no-pager
+  302  free -h
+  303  systemctl restart rabbitmq-server
+  304  exit
+  305  history
+  306  rabbitmqctl set_policy balanced-quorum "quorum-test-.*"   '{"queue-leader-locator":"balanced"}' --apply-to queues
+  307  systemctl status rabbitmq-server
+  308  journalctl -u rabbitmq-server
+  309  systemctl restart rabbitmq-server
+  310  journalctl -xeu rabbitmq-server.service
+  311  df -h
+  312  free -h
+  313  exit
+  314  systemctl status rabbitmq-server
+  315  rabbitmqctl set_policy balanced-quorum "quorum-test-.*"   '{"queue-leader-locator":"balanced"}' --apply-to queues
+  316  cd /etc/haproxy/
+  317  ls
+  318  vi haproxy.cfg
+  319  rabbitmq-diagnostics quorum_queue_status
+  320  rabbitmqctl quorum_status
+  321  rabbitmq-diagnostics quorum_status
+  322  rabbitmq-diagnostics quorum_status --vhost / quorum-test-1
+  323  systemctl status rabbitmq-server
+  324  exit
+  325  systemctl status rabbitmq-server
+  326  systemctl status rabbitmq-server
+  327  systemctl restart rabbitmq-server
+  328  journalctl -u rabbitmq-server -n  --no-pager
+  329  systemctl stop rabbitmq-server
+  330  systemctl restart rabbitmq-server
+  331  exit
+  332  sytemctl status rabbitmq-server
+  333  sydtemctl status rabbitmq-server
+  334  systemctl status rabbitmq-server
+  335  rabbitmq-server
+  336  systemctl status rabbitmq-server
+  337  systemctl status rabbitmq-server
+  338  rabbitmqctl environment | grep memory
+  339  ls /var/lib/rabbitmqmr
+  340  ls /var/lib/rabbitmq
+  341  ls /var/lib/rabbitmq/mnesia
+  342  ls /var/lib/rabbitmq/mnesia/rabbit@rabbit-node
+  343  rm -rf /var/lib/rabbitmq/mnesia/rabbit@rabbit-node
+  344  rm -rf /var/lib/rabbitmq/mnesia/rabbit@*
+  345  ls /var/lib/rabbitmq/mnesia/
+  346  sudo systemctl stop rabbitmq-server
+  347  sudo rm -rf /var/lib/rabbitmq/mnesia/*
+  348  sudo systemctl start rabbitmq-server
+  349  sudo systemctl status rabbitmq-server
+  350  exit
+  351  rabbitmqctl add_users -p / cabrel cabrel
+  352  rabbitmqctl add_user -p / cabrel cabrel
+  353  rabbitmqctl set_permissions -p / cabrel "*" "*" "*"
+  354  rabbitmqctl set_permissions -p / cabrel ".*" ".*" ".*"
+  355  rabbitmqctl set_user_tags cabrel administrator
+  356  rabbitmqctl list_users
+  357  exit
+  358  hisotry
+  359  history
+  360  cd /var/lib/rabbitmq/mnesia
+  361  ls
+  362  sudo systemctl stop rabbitmq-server
+  363  cd ..
+  364  ls
+  365  cd /var/rabbitq
+  366  cd /var/rabbitmq
+  367  cd /var/
+  368  ls
+  369  cd /etc/rabbitmq
+  370  ls
+  371  cat rabbitmq
+  372  ls
+  373  cat rabbitmq.conf
+  374  sudo apt purge rabbitmq-server -y
+  375  cd /home/vagrant
+  376  sudo apt autoremove --purge -y
+  377  ls /var/lib/rabbitmq
+  378  sudo rabbitmqctl stop_app
+  379  exit
+  380  rabbitmqctl list_users
+  381  rabbitmqctl add_users
+  382  systemctl status rabbitmq
+  383  systemctl status rabbitmq-server
+  384  sudo apt-get update -q -y >/dev/null
+  385  sudo apt-get update -q -y >/dev/null
+  386  sudo apt-get install rabbitmq-server -y --fix-missing
+  387  systemctl status rabbitmq-server
+  388  sudo journalctl -u keepalived
+  389  systemctl cat keepalived
+  390  cat /etc/keepalived/keepalived.conf
+  391  rabbitmqctl add_user nzhinusoft nzhinusoft
+  392  rabbitmqctl set_permissions -p / nzhinusoft ".*" ".*" ".*"
+  393  rabbitmqctl set_user_tags nzhinusoft administrator
+  394  rabbitmqctl delete_user guest
+
+  396  apt-get update
+  397  apt-get install vim
+  398  vim remove-rabbit.sh
+  399  chmod +x remove-rabbit.sh 
+  400  ./remove-rabbit.sh 
+  401  udo apt-get install rabbitmq-server -y --fix-missing
+  402  sudo apt-get install rabbitmq-server -y --fix-missing
+  403  rabbitmq-plugins enable rabbitmq_management
+  404  echo "NZHINUSOFTCMRFRANCE" | sudo tee /var/lib/rabbitmq/.erlang.cookie
+  405  echo "listeners.tcp.1 = 0.0.0.0:5672" | sudo tee -a /etc/rabbitmq/rabbitmq.conf
+  406  echo "management.tcp.port = 15672" | sudo tee -a /etc/rabbitmq/rabbitmq.conf
+  407  systemctl restart rabbitmq-server
+  408  rabbitmqctl add_user nzhinusoft nzhinusoft
+  409  rabbitmqctl set_permissions -p / nzhinusoft ".*" ".*" ".*"
+  410  rabbitmqctl set_user_tags nzhinusoft administrator
+  411  rabbitmqctl delete_user guest
+  412  sudo filebeat modules enable rabbitmq
+  413  rabbitmqctl enable rabbitmq_prometheus
+  414  rabbitmqctl enable_feature_flag rabbitmq_prometheus
+  415  rabbitmq-plugins enable rabbitmq_prometheus
+  416  hisotry
+  417  history
+  418  rabbitmqctl --help
+  419  rabbitmqctl list_feature_flags
+  420  rabbitmq-plugins enable all
+  421  rabbitmqctl enable_feature_tags all
+  422  rabbitmqctl enable_feature_flag all
+  423  rabbitmqctl list_feature_flags
+  424  sudo systemctl restart metricbeat
+  425  4
+  426  sudo systemctl restart metricbeat
+  427  sudo systemctl status metricbeat
+  428  sudo metricbeat test config
+  429  sudo metricbeat test output
+  430  curl -s "localhost:9200/_cat/indices?v" 
+  431  curl -s "192.168.56.105:9200/_cat/indices?v" 
+  432  curl -s "192.168.0.105:9200/_cat/indices?v" 
+  433  nano /etc/metricbeat/modules.d/rabbitmq.yml 
+  434  nano /etc/metricbeat/modules.d/rabbitmq.yml 
+  435  rabbitmqctl add_user metricbeat metricbeat
+  436  systemctl status metricbeat
+  437  systemctl restart metricbeat
+  438  systemctl status metricbeat
+  439  systemctl restart rabbitmq-server
+  440  rabbitmq-diagnostics status | grep -A 2 -B 2 "Node data directory"
+  441  ls
+  442  rabbitmq-diagnostics status | grep -A 2 -B 2 "Node data directory"
+  443  cd  /var/lib/rabbitmq/mnesia/rabbit@rabbit-node1
+  444  ls
+  445  cd msg_stores/
+  446  ls
+  447  cd vhosts/
+  448  l
+  449  lq
+  450  ls
+  451  cd ..
+  452  ls
+  453  cd .;
+  454  cd ..
+  455  ls
+  456  cd quorum/
+  457  ls
+  458  cd rabbit\@rabbit-node1/
+  459  ls
+  460  cd ..
+  461  cd ..
+  462  ls
+  463  exit
+  464  rabibtmq-plugins lits
+  465  rabibtmq_plugins lits
+  466  rabibtmq_plugings lits
+  467  history | rabbitmq
+  468  history | grep rabbitmq
+  469  rabbitmq-plugins  lists
+  470  rabbitmq-plugins  list
+  471  rabbitmq-plugins  enable consistent_hash
+  472  rabbitmq-plugins  enable rabbitmq_consistent_hash_exchange
+  473  rabbitmqctl list_queues 
+  474  systemctl status rabbitmq
+  475  systemctl status rabbitmq-server
+  476  cd /var/lib/rabbitmq/
+  477  ls
+  478  cd mnesia/
+  479  ls
+  480  cd rabbit\@rabbit-node1
+  481  ls
+  482  cd quorum/
+  483  ls
+  484  cd rabbit\@rabbit-node1/
+  485  ls
+  486  cd ..
+  487  cd ..
+  488  cd msg_stores/
+  489  ls
+  490  cd vhosts/
+  491  ls
+  492  cd 628WB79CIFDYO9LJI6DKMI09L/
+  493  ls
+  494  cd ..
+  495  mv 628WB79CIFDYO9LJI6DKMI09L/ /home/vagrant/
+  496  ls
+  497  systemctl restart rabbitmq-server
+  498  rm -rf  /home/vagrant/628WB79CIFDYO9LJI6DKMI09L/
+  499  systemctl restart rabbitmq-server
+  500  exit
+  501  history
