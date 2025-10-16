@@ -1,0 +1,204 @@
+**configuration d' un **cluster RabbitMQ à 3 nœuds** avec :
+
+* 🔐 TLS activé pour les clients et le management UI
+* 🔒 TLS activé pour la communication inter-nœuds (Erlang distribution)
+* 🧩 Découverte classique (configuration statique)
+
+---
+
+##  **Architecture du cluster**
+
+| Nom du nœud | Hostname (résolvable DNS ou `/etc/hosts`) | IP privée   | Rôle   |
+| ----------- | ----------------------------------------- | ----------- | ------ |
+| `rabbit1`   | `rabbit1.local`                           | `10.0.0.11` | Master |
+| `rabbit2`   | `rabbit2.local`                           | `10.0.0.12` | Peer   |
+| `rabbit3`   | `rabbit3.local`                           | `10.0.0.13` | Peer   |
+
+> 🔸 Les trois nœuds utilisent un certificat signé par une **même autorité de certification interne (CA)**.
+> 🔸 Chaque certificat doit inclure le **Common Name (CN)** correspondant au hostname du nœud.
+
+---
+
+## **Structure des certificats sur chaque nœud**
+
+```
+/etc/rabbitmq/
+├── ca.crt
+├── server.crt
+├── server.key
+└── erlang.cookie
+```
+
+> Les permissions doivent être strictes :
+
+```bash
+chmod 600 /etc/rabbitmq/server.key
+chmod 400 /var/lib/rabbitmq/.erlang.cookie
+```
+
+---
+
+##  **Configuration `rabbitmq.conf` (commune à tous les nœuds)**
+
+```ini
+# ========================
+#  GENERAL CONFIGURATION
+# ========================
+cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config
+cluster_formation.classic_config.nodes.1 = rabbit@rabbit1
+cluster_formation.classic_config.nodes.2 = rabbit@rabbit2
+cluster_formation.classic_config.nodes.3 = rabbit@rabbit3
+
+loopback_users.guest = false
+listeners.tcp = none  # Désactiver TCP non chiffré
+
+# ========================
+#  TLS CONFIGURATION
+# ========================
+listeners.ssl.default = 5671
+ssl_options.cacertfile = /etc/rabbitmq/ca.crt
+ssl_options.certfile   = /etc/rabbitmq/server.crt
+ssl_options.keyfile    = /etc/rabbitmq/server.key
+ssl_options.verify     = verify_peer
+ssl_options.fail_if_no_peer_cert = true
+ssl_options.versions.1 = tlsv1.2
+ssl_options.versions.2 = tlsv1.3
+
+# ========================
+#  MANAGEMENT (HTTPS)
+# ========================
+management.tcp.port = 15671
+management.ssl.port = 15671
+management.ssl.cacertfile = /etc/rabbitmq/ca.crt
+management.ssl.certfile   = /etc/rabbitmq/server.crt
+management.ssl.keyfile    = /etc/rabbitmq/server.key
+management.ssl.verify     = verify_peer
+management.ssl.fail_if_no_peer_cert = false
+
+# ========================
+#  DISTRIBUTION (INTER-NODES)
+# ========================
+# Port de communication interne
+# (Erlang distribution TLS)
+distribution.port_range.minimum = 35672
+distribution.port_range.maximum = 35672
+
+# Activer TLS entre nœuds
+distribution.use_ssl = true
+distribution.ssl_options.cacertfile = /etc/rabbitmq/ca.crt
+distribution.ssl_options.certfile   = /etc/rabbitmq/server.crt
+distribution.ssl_options.keyfile    = /etc/rabbitmq/server.key
+distribution.ssl_options.verify     = verify_peer
+distribution.ssl_options.fail_if_no_peer_cert = true
+
+# ========================
+#  LOGGING
+# ========================
+log.file.level = info
+log.file.rotation.date = $D0
+log.file.rotation.count = 7
+```
+
+---
+
+##  **Remarques importantes**
+
+### 1. Hostnames et `/etc/hosts`
+
+Chaque nœud doit pouvoir résoudre les autres par leur nom :
+
+```bash
+10.0.0.11 rabbit1 rabbit1.local
+10.0.0.12 rabbit2 rabbit2.local
+10.0.0.13 rabbit3 rabbit3.local
+```
+
+### 🔸 2. Cookie Erlang
+
+Le fichier `.erlang.cookie` doit être **identique sur tous les nœuds** :
+
+```bash
+sudo scp /var/lib/rabbitmq/.erlang.cookie rabbit2:/var/lib/rabbitmq/.erlang.cookie
+sudo scp /var/lib/rabbitmq/.erlang.cookie rabbit3:/var/lib/rabbitmq/.erlang.cookie
+chmod 400 /var/lib/rabbitmq/.erlang.cookie
+```
+
+---
+
+##  **Étapes de déploiement**
+
+### Sur chaque nœud :
+
+```bash
+sudo systemctl stop rabbitmq-server
+sudo rm -rf /var/lib/rabbitmq/mnesia
+sudo systemctl start rabbitmq-server
+```
+
+### Sur le nœud principal (`rabbit1`) :
+
+```bash
+rabbitmqctl stop_app
+rabbitmqctl reset
+rabbitmqctl start_app
+```
+
+### Sur les autres nœuds :
+
+```bash
+rabbitmqctl stop_app
+rabbitmqctl reset
+rabbitmqctl join_cluster rabbit@rabbit1
+rabbitmqctl start_app
+```
+
+Vérifie le cluster :
+
+```bash
+rabbitmqctl cluster_status
+```
+
+---
+
+##  **Vérification TLS**
+
+### Côté client
+
+```bash
+openssl s_client -connect rabbit1.local:5671 -CAfile /etc/rabbitmq/ca.crt
+```
+
+### Côté cluster
+
+Vérifie que le port de distribution TLS est bien utilisé :
+
+```bash
+sudo netstat -tulpen | grep 35672
+```
+
+---
+
+## 🛡️ **Schéma simplifié**
+
+```
+                +-------------------+
+                |   Client AMQPS    |
+                | (TLS 5671)        |
+                +---------+---------+
+                          |
+                  +-------v--------+
+                  |  rabbit1.local |
+                  |   TLS + HTTPS  |
+                  +-------+--------+
+                          |
+          (TLS 35672)     |      (TLS 35672)
+                  +-------v--------+
+                  |  rabbit2.local |
+                  +-------+--------+
+                          |
+                  +-------v--------+
+                  |  rabbit3.local |
+                  +----------------+
+```
+
+---
