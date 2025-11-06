@@ -1,0 +1,558 @@
+
+## Causes probables de l'arrêt brusque
+
+### 1. **Saturation de la mémoire**
+La cause la plus fréquente dans ce scénario :
+- Millions de messages accumulés dans la queue `event`
+- Transferts massifs vers le DLQ toutes les 5 secondes
+- RabbitMQ atteint son seuil de mémoire (par défaut 40% de la RAM) et déclenche un **memory alarm**
+- En cas de saturation critique, le cluster peut crasher
+
+### 2. **Saturation du disque**
+- Les messages persistants saturent `/var/lib/rabbitmq`
+- RabbitMQ déclenche un **disk alarm** à 50GB libre par défaut
+- Avec des millions de messages + DLQ, l'espace se remplit rapidement
+- Le node peut crasher si plus d'espace pour les WAL (Write-Ahead Logs)
+
+### 3. **Épuisement des file descriptors**
+Même avec ulimit configuré :
+- Chaque connexion, channel, queue consomme des FDs
+- Le transfert massif vers DLQ crée des pics de connexions/channels
+- Vérifier si la limite est suffisante (recommandé : 65536+)
+
+### 4. **Split-brain dans le cluster**
+- Partition réseau entre les 3 nodes
+- Les queues classiques (non-HA) deviennent inaccessibles
+- Perte potentielle de messages selon la configuration de `cluster_partition_handling`
+
+### 5. **Saturation du Erlang VM**
+- Trop de processus Erlang créés
+- Épuisement de la mémoire de l'Erlang VM
+- Les atoms table peut saturer
+
+## Plan de diagnostic
+
+### Phase 1 : Analyse des logs
+
+```bash
+# Logs RabbitMQ (chercher les patterns critiques)
+tail -f /var/log/rabbitmq/rabbit@hostname.log
+
+# Patterns à chercher :
+# - "Memory alarm" ou "Disk alarm"
+# - "crashed" ou "failed"
+# - "partition" 
+# - "out of memory"
+# - "erl_crash.dump" généré
+```
+
+### Phase 2 : Vérification mémoire et disque
+
+```bash
+# État mémoire avant crash (si logs disponibles)
+rabbitmqctl status | grep -A 20 memory
+
+# Espace disque
+df -h /var/lib/rabbitmq
+
+# Analyser la taille des fichiers RabbitMQ
+du -sh /var/lib/rabbitmq/mnesia/rabbit@*/
+
+# Vérifier les alarms actuelles
+rabbitmqctl alarm_list
+```
+
+### Phase 3 : Monitoring en temps réel
+
+```bash
+# Surveiller la queue event
+rabbitmqctl list_queues name messages messages_ready messages_unacknowledged memory
+
+# Surveiller spécifiquement votre queue
+watch -n 1 'rabbitmqctl list_queues name messages memory | grep event'
+
+# Surveiller les connexions/channels
+rabbitmqctl list_connections name channels | wc -l
+rabbitmqctl list_channels | wc -l
+```
+
+### Phase 4 : Analyse Erlang
+
+```bash
+# Nombre de processus Erlang
+rabbitmqctl eval 'erlang:system_info(process_count).'
+rabbitmqctl eval 'erlang:system_info(process_limit).'
+
+# Mémoire Erlang VM
+rabbitmqctl eval 'erlang:memory().'
+```
+
+## Solutions recommandées
+
+### Solutions immédiates
+
+1. **Configurer des limites strictes sur les queues**
+```bash
+# Politique de longueur maximale
+rabbitmqctl set_policy event-limit "^event$" \
+  '{"max-length":100000,"overflow":"reject-publish"}' \
+  --apply-to queues
+```
+
+2. **Augmenter le seuil mémoire** (temporaire)
+```ini
+# /etc/rabbitmq/rabbitmq.conf
+vm_memory_high_watermark.relative = 0.6
+# ou absolu
+vm_memory_high_watermark.absolute = 4GB
+```
+
+3. **Configurer le paging vers disque**
+```ini
+vm_memory_high_watermark_paging_ratio = 0.75
+```
+
+### Solutions structurelles
+
+1. **Migrer vers des Quorum Queues**
+```bash
+# Plus résilientes, meilleure gestion mémoire
+# Réplication native sans perte de messages
+```
+
+2. **Implémenter le Lazy mode pour les queues classiques**
+```bash
+rabbitmqctl set_policy event-lazy "^event$" \
+  '{"queue-mode":"lazy"}' --apply-to queues
+# Messages sur disque immédiatement
+```
+
+3. **Optimiser le TTL et le DLQ**
+```bash
+# Réduire le TTL à 5s peut créer une charge massive
+# Considérer un TTL plus long avec retry exponential
+# Ou traiter directement sans DLQ si possible
+```
+
+4. **Monitoring proactif**
+- Prometheus + Grafana avec les exporters RabbitMQ
+- Alertes sur :
+  - Memory usage > 70%
+  - Disk space < 20%
+  - Queue depth > seuil défini
+  - Message rate anormal
+
+5. **Architecture**
+```
+┌─────────────────────────────────────────┐
+│ Problème actuel:                        │
+│ Event → (5s timeout) → DLQ              │
+│ Millions msgs = Saturation              │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│ Solution optimale:                      │
+│ - Augmenter capacité traitement Mulesoft│
+│ - Consumer plus rapide (prefetch)       │
+│ - Sharding de la queue event            │
+│ - Quorum queue avec lazy mode           │
+│ - Backpressure côté producteur          │
+└─────────────────────────────────────────┘
+```
+
+## Action prioritaire
+
+**Commencez par vérifier les logs** pour identifier la cause exacte, puis regardez l'utilisation mémoire/disque historique. Le pattern "millions de messages + timeout 5s + DLQ" suggère fortement une **saturation mémoire** ou un **problème de performance de Mulesoft** qui ne suit pas la cadence.
+
+Voulez-vous que je détaille un aspect particulier du diagnostic ou des solutions ?
+## 1. Diagnostic approfondi de la saturation mémoire
+
+### Comprendre le comportement de RabbitMQ avec la mémoire
+
+```bash
+# Script de monitoring à exécuter AVANT le prochain crash
+cat > /tmp/rabbitmq_monitor.sh << 'EOF'
+#!/bin/bash
+LOG_FILE="/var/log/rabbitmq_custom_monitor.log"
+
+while true; do
+    echo "=== $(date) ===" >> $LOG_FILE
+    
+    # Mémoire totale du node
+    rabbitmqctl status | grep -A 15 "Memory" >> $LOG_FILE
+    
+    # Top 10 queues par consommation mémoire
+    echo "Top queues by memory:" >> $LOG_FILE
+    rabbitmqctl list_queues name messages messages_ready messages_unacknowledged \
+        memory consumers state --formatter json | \
+        jq -r '.[] | "\(.memory)\t\(.name)\t\(.messages)"' | \
+        sort -rn | head -10 >> $LOG_FILE
+    
+    # Connexions actives
+    echo "Active connections: $(rabbitmqctl list_connections | wc -l)" >> $LOG_FILE
+    
+    # Channels actifs
+    echo "Active channels: $(rabbitmqctl list_channels | wc -l)" >> $LOG_FILE
+    
+    # Erlang processes
+    PROC_COUNT=$(rabbitmqctl eval 'erlang:system_info(process_count).')
+    PROC_LIMIT=$(rabbitmqctl eval 'erlang:system_info(process_limit).')
+    echo "Erlang processes: $PROC_COUNT / $PROC_LIMIT" >> $LOG_FILE
+    
+    # Disk space
+    echo "Disk usage:" >> $LOG_FILE
+    df -h /var/lib/rabbitmq >> $LOG_FILE
+    
+    # Alarms
+    ALARMS=$(rabbitmqctl alarm_list)
+    echo "Alarms: $ALARMS" >> $LOG_FILE
+    
+    echo "---" >> $LOG_FILE
+    
+    sleep 30
+done
+EOF
+
+chmod +x /tmp/rabbitmq_monitor.sh
+nohup /tmp/rabbitmq_monitor.sh &
+```
+
+### Analyser les dumps Erlang (si crash)
+
+```bash
+# Localiser le crash dump
+ls -lht /var/log/rabbitmq/erl_crash.dump* | head -5
+
+# Analyser le crash dump (les sections importantes)
+cat erl_crash.dump | grep -A 50 "Memory"
+cat erl_crash.dump | grep -A 20 "Slogan"  # Cause du crash
+cat erl_crash.dump | grep "System limit"
+
+# Outils avancés
+# Installer crashdump_viewer (Erlang)
+erl -eval 'crashdump_viewer:start().' -noshell
+```
+
+## 2. Configuration optimale pour votre cas d'usage
+
+### Configuration RabbitMQ (/etc/rabbitmq/rabbitmq.conf)
+
+```ini
+# === MÉMOIRE ===
+# Augmenter le seuil (adapter selon RAM disponible)
+# Si 16GB RAM disponible, utiliser 8GB max pour RabbitMQ
+vm_memory_high_watermark.absolute = 8GB
+
+# Paging plus agressif (commencer à pager à 75% du seuil)
+vm_memory_high_watermark_paging_ratio = 0.75
+
+# === DISQUE ===
+# Limite disque (50GB minimum libre recommandé)
+disk_free_limit.absolute = 50GB
+
+# === RÉSEAU ET CONNEXIONS ===
+# Heartbeat pour détecter connexions mortes
+heartbeat = 60
+
+# Timeout des connexions
+channel_max = 2048
+connection_max = 2000
+
+# === ERLANG VM ===
+# File descriptors (déjà configuré via ulimit, mais on confirme)
+# Dans /etc/systemd/system/rabbitmq-server.service.d/limits.conf
+# [Service]
+# LimitNOFILE=65536
+
+# Processus Erlang max
+# RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="+P 1048576"
+
+# === CLUSTER ===
+# Gestion des partitions réseau
+cluster_partition_handling = autoheal
+
+# === LOGGING ===
+log.file.level = info
+log.console.level = warning
+```
+
+### Configuration avancée pour votre queue "event"
+
+```bash
+# Approche 1: Queue Lazy (recommandé pour gros volumes)
+rabbitmqctl set_policy event-lazy-policy "^event$" \
+  '{
+    "queue-mode": "lazy",
+    "max-length": 500000,
+    "overflow": "drop-head",
+    "message-ttl": 30000
+  }' \
+  --priority 10 \
+  --apply-to queues
+
+# Explication:
+# - lazy mode: messages sur disque immédiatement → économise RAM
+# - max-length: limite stricte à 500k messages
+# - overflow drop-head: supprime les anciens messages si dépassement
+# - message-ttl: 30s max (adapter selon votre besoin)
+```
+
+## 3. Diagnostic du problème Mulesoft
+
+Le vrai problème semble être **Mulesoft qui ne suit pas la cadence**. Analysons :
+
+### Mesurer les performances de consommation
+
+```bash
+# Script pour mesurer le débit de traitement
+cat > /tmp/measure_consumption.sh << 'EOF'
+#!/bin/bash
+
+QUEUE_NAME="event"
+INTERVAL=10  # secondes
+
+while true; do
+    MSGS_BEFORE=$(rabbitmqctl list_queues name messages | grep "^$QUEUE_NAME" | awk '{print $2}')
+    sleep $INTERVAL
+    MSGS_AFTER=$(rabbitmqctl list_queues name messages | grep "^$QUEUE_NAME" | awk '{print $2}')
+    
+    CONSUMED=$((MSGS_BEFORE - MSGS_AFTER))
+    RATE=$((CONSUMED / INTERVAL))
+    
+    echo "$(date): Messages consumed: $CONSUMED in ${INTERVAL}s = ${RATE} msg/s | Queue depth: $MSGS_AFTER"
+    
+    # Si le rate est négatif, la queue grossit
+    if [ $RATE -lt 0 ]; then
+        echo "⚠️  WARNING: Queue is growing! Production > Consumption"
+    fi
+done
+EOF
+
+chmod +x /tmp/measure_consumption.sh
+./tmp/measure_consumption.sh
+```
+
+### Optimiser le consumer Mulesoft
+
+Vérifiez ces paramètres côté Mulesoft :
+
+```xml
+<!-- Configuration Mulesoft (exemple) -->
+<rabbitmq:listener config-ref="RabbitMQ_Config" 
+    queueName="event"
+    numberOfConsumers="10"          <!-- Augmenter si CPU disponible -->
+    ackMode="AUTO"
+    prefetchCount="100">            <!-- Crucial: définir le prefetch -->
+    
+    <!-- Votre logique de traitement -->
+    
+</rabbitmq:listener>
+```
+
+**Points critiques :**
+- `prefetchCount` : nombre de messages pré-chargés par consumer
+  - Trop bas (1-10) → mauvaise performance
+  - Optimal : 50-200 selon temps de traitement
+- `numberOfConsumers` : paralléliser le traitement
+- `ackMode` : AUTO vs MANUAL (MANUAL plus sûr mais plus lent)
+
+### Calculer la capacité nécessaire
+
+```python
+# Calculateur de capacité
+# Exécuter en Python
+
+production_rate = 10000  # messages par seconde entrants
+processing_time = 0.5    # secondes par message (Mulesoft)
+timeout_dlq = 5          # secondes avant DLQ
+
+# Capacité minimale requise
+min_consumers = production_rate * processing_time
+print(f"Consumers minimum requis: {min_consumers}")
+
+# Avec la marge de sécurité (20%)
+recommended_consumers = min_consumers * 1.2
+print(f"Consumers recommandés: {int(recommended_consumers)}")
+
+# Throughput actuel
+actual_consumers = 10  # votre config actuelle
+actual_prefetch = 50
+actual_throughput = actual_consumers / processing_time
+print(f"Throughput actuel: {actual_throughput} msg/s")
+
+if actual_throughput < production_rate:
+    print(f"⚠️  PROBLÈME: Vous perdez {production_rate - actual_throughput} msg/s")
+    print(f"Les messages s'accumulent et vont vers DLQ après {timeout_dlq}s")
+```
+
+## 4. Architecture de solution robuste
+
+### Option A : Sharding de la queue (recommandé)
+
+```bash
+# Créer plusieurs queues "event" avec distribution
+# Utiliser un exchange avec routing
+
+# 1. Créer l'exchange
+rabbitmqadmin declare exchange name=event_exchange type=consistent-hash
+
+# 2. Créer 4 queues shardées
+for i in {1..4}; do
+    rabbitmqadmin declare queue name=event_shard_$i \
+        queue_mode=lazy \
+        durable=true
+    
+    # Bind avec un poids
+    rabbitmqadmin declare binding source=event_exchange \
+        destination=event_shard_$i \
+        routing_key="$((i * 10))"
+done
+
+# 3. Chaque queue a son propre consumer Mulesoft
+# Capacité multipliée par 4
+```
+
+### Option B : Dead Letter Exchange intelligent
+
+```bash
+# Au lieu d'un simple DLQ, utiliser un système de retry
+
+# 1. Queue principale avec retry policy
+rabbitmqctl set_policy event-retry "^event$" \
+  '{
+    "dead-letter-exchange": "event.retry.exchange",
+    "dead-letter-routing-key": "retry",
+    "message-ttl": 30000
+  }'
+
+# 2. Exchange de retry avec délai progressif
+# event.retry.exchange → event.retry.wait.30s → event (retry 1)
+# event.retry.exchange → event.retry.wait.60s → event (retry 2)
+# event.retry.exchange → event.dlq (final)
+
+# Schéma:
+# Producer → event → (échec) → retry.wait.30s → event
+#                              (échec) → retry.wait.60s → event
+#                              (échec) → DLQ final
+```
+
+### Option C : Flow Control côté producteur
+
+```bash
+# Implémenter un mécanisme de backpressure
+
+# 1. Monitoring de la queue depth
+THRESHOLD=100000
+
+DEPTH=$(rabbitmqctl list_queues name messages | grep "^event" | awk '{print $2}')
+
+if [ $DEPTH -gt $THRESHOLD ]; then
+    echo "Queue too deep, signal producers to slow down"
+    # Déclencher un flag Redis, API call, etc.
+fi
+
+# 2. Les producteurs vérifient ce flag avant de publier
+# Alternative : utiliser un queue avec overflow=reject-publish
+```
+
+## 5. Monitoring production-ready
+
+### Prometheus + Grafana
+
+```yaml
+# docker-compose.yml pour stack monitoring
+version: '3'
+services:
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+  
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter
+    environment:
+      RABBIT_URL: http://rabbitmq:15672
+      RABBIT_USER: admin
+      RABBIT_PASSWORD: password
+    ports:
+      - "9419:9419"
+  
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  grafana-storage:
+```
+
+### Alertes critiques à configurer
+
+```yaml
+# prometheus-alerts.yml
+groups:
+  - name: rabbitmq
+    interval: 30s
+    rules:
+      - alert: RabbitMQMemoryHigh
+        expr: rabbitmq_node_mem_used / rabbitmq_node_mem_limit > 0.8
+        for: 2m
+        annotations:
+          summary: "RabbitMQ memory usage > 80%"
+      
+      - alert: RabbitMQQueueGrowing
+        expr: rate(rabbitmq_queue_messages[5m]) > 100
+        for: 5m
+        annotations:
+          summary: "Queue growing rapidly"
+      
+      - alert: RabbitMQDiskLow
+        expr: rabbitmq_node_disk_free < 10737418240  # 10GB
+        annotations:
+          summary: "Disk space < 10GB"
+      
+      - alert: RabbitMQConsumerDown
+        expr: rabbitmq_queue_consumers{queue="event"} == 0
+        for: 1m
+        annotations:
+          summary: "No consumers on event queue!"
+```
+
+## 6. Plan d'action immédiat (checklist)
+
+### Aujourd'hui (urgent)
+
+- [ ] Activer le script de monitoring (`rabbitmq_monitor.sh`)
+- [ ] Vérifier les logs : `tail -f /var/log/rabbitmq/*.log`
+- [ ] Mesurer le taux de consommation vs production
+- [ ] Configurer `queue-mode=lazy` sur la queue event
+- [ ] Mettre une limite `max-length` pour éviter OOM
+
+### Cette semaine (important)
+
+- [ ] Analyser les crash dumps s'ils existent
+- [ ] Optimiser le `prefetchCount` Mulesoft (tests 50, 100, 200)
+- [ ] Augmenter le nombre de consumers Mulesoft si possible
+- [ ] Implémenter le monitoring Prometheus
+- [ ] Configurer les alertes
+
+### Ce mois (stratégique)
+
+- [ ] Migrer vers Quorum Queues (RabbitMQ 3.8+)
+- [ ] Implémenter le sharding si volumes très élevés
+- [ ] Revoir l'architecture du retry/DLQ
+- [ ] Load testing complet avec simulation de charge
+- [ ] Documentation et runbooks pour l'équipe ops
+
+---
+
+**Quelle partie voulez-vous que j'approfondisse encore plus ?**
+- Le diagnostic des crash dumps Erlang ?
+- L'optimisation spécifique Mulesoft ?
+- L'architecture de sharding détaillée ?
+- Les Quorum Queues vs Classic Queues ?
+- Le monitoring et alerting avancé ?
