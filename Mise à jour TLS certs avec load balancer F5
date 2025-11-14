@@ -1,0 +1,217 @@
+# Solution sans accès au Load Balancer F5
+
+Si tu n'as **pas accès au F5**, tu as plusieurs options pour gérer la rotation.
+
+## Option 1 : Rotation avec interruption acceptée (la plus simple)
+
+### Principe
+Accepter que pendant le redémarrage de chaque nœud, **50% de la capacité est perdue**.
+
+### Procédure
+
+**Pour node1 :**
+1. Appliquer la nouvelle configuration sur node1
+2. Redémarrer node1
+3. Attendre qu'il rejoigne le cluster et se synchronise
+4. Vérifier la santé
+
+**Pour node2 :**
+5. Attendre 2-3 minutes
+6. Appliquer la nouvelle configuration sur node2
+7. Redémarrer node2
+8. Attendre qu'il rejoigne le cluster
+9. Vérifier la santé
+
+### Conséquence
+- Les clients connectés à node1 seront déconnectés pendant son redémarrage (~30-45s)
+- Les clients connectés à node2 seront déconnectés pendant son redémarrage (~30-45s)
+- Les clients avec **reconnexion automatique** se reconnecteront au nœud disponible
+- **Pas de perte de messages** si tes queues sont répliquées
+
+### Quand choisir cette option ?
+- Tes clients gèrent bien les reconnexions
+- Tu as une fenêtre de maintenance acceptable
+- Trafic modéré
+
+---
+
+## Option 2 : Bloquer les nouvelles connexions via firewall
+
+### Principe
+Utiliser **iptables** pour empêcher les nouvelles connexions tout en laissant les existantes se terminer.
+
+### Procédure pour node1
+
+**Bloquer les nouvelles connexions :**
+```bash
+# Bloquer le port 5671 (SSL) pour nouvelles connexions
+iptables -I INPUT -p tcp --dport 5671 -m state --state NEW -j REJECT
+
+# Optionnel : bloquer aussi 5672 (AMQP) et 15672 (Management)
+iptables -I INPUT -p tcp --dport 5672 -m state --state NEW -j REJECT
+```
+
+**Attendre le drainage :**
+```bash
+# Surveiller les connexions actives
+watch -n 2 'rabbitmqctl list_connections | wc -l'
+
+# Ou forcer la fermeture après un délai raisonnable (ex: 30s)
+sleep 30
+rabbitmqctl close_all_connections "Certificate rotation maintenance"
+```
+
+**Appliquer les changements :**
+```bash
+# Modifier la configuration
+# Redémarrer RabbitMQ
+systemctl restart rabbitmq-server
+
+# Attendre le retour
+until rabbitmqctl status &>/dev/null; do sleep 2; done
+rabbitmqctl node_health_check
+```
+
+**Réactiver les connexions :**
+```bash
+# Supprimer les règles iptables
+iptables -D INPUT -p tcp --dport 5671 -m state --state NEW -j REJECT
+iptables -D INPUT -p tcp --dport 5672 -m state --state NEW -j REJECT
+```
+
+**Répéter pour node2** après 2-3 minutes.
+
+### Avantages
+- Drainage contrôlé des connexions
+- Pas besoin d'accès au F5
+- Les clients se reconnectent automatiquement au nœud disponible
+
+### Inconvénients
+- Nécessite accès root sur les serveurs
+- Les clients voient quand même une déconnexion
+
+---
+
+## Option 3 : Utiliser le mode maintenance RabbitMQ
+
+### Principe
+RabbitMQ 3.8 permet de mettre un nœud en mode maintenance pour drainage.
+
+### Procédure pour node1
+
+**Activer le mode maintenance :**
+```bash
+# Marquer le nœud comme en maintenance
+rabbitmqctl mark_as_maintenance node1@hostname
+
+# Cela fait que :
+# - Les nouvelles connexions sont découragées
+# - Les queues leaders migrent vers node2
+# - Le nœud reste dans le cluster
+```
+
+**Attendre la migration :**
+```bash
+# Attendre que les queues leaders migrent
+sleep 30
+
+# Vérifier qu'il n'y a plus de queues leaders sur node1
+rabbitmqctl list_queues name leader --node node1@hostname
+```
+
+**Appliquer les changements :**
+```bash
+# Fermer les connexions restantes
+rabbitmqctl close_all_connections "Certificate rotation"
+
+# Modifier configuration et redémarrer
+systemctl restart rabbitmq-server
+
+# Attendre retour
+until rabbitmqctl status &>/dev/null; do sleep 2; done
+```
+
+**Désactiver le mode maintenance :**
+```bash
+rabbitmqctl unmark_for_maintenance node1@hostname
+```
+
+**Répéter pour node2.**
+
+### ⚠️ Attention
+Cette fonctionnalité existe dans RabbitMQ 3.8, mais le drainage n'est **pas aussi agressif** que dans les versions 3.9+.
+
+---
+
+## Option 4 : Coordination avec l'équipe réseau
+
+### Si tu n'as pas l'accès direct au F5
+
+**Demander à l'équipe réseau de :**
+
+1. **Désactiver node1 dans le pool F5**
+2. **Tu notifies quand tu as terminé**
+3. **Ils réactivent node1**
+4. **Répéter pour node2**
+
+### Préparation pour cette option
+
+Créer un **document de procédure clair** pour l'équipe réseau :
+
+```
+PROCÉDURE DE ROTATION CERTIFICATS RABBITMQ
+
+Intervention programmée : [DATE/HEURE]
+Durée estimée : 10 minutes
+Intervenants : [TOI], [Équipe Réseau]
+
+ÉTAPE 1 : Équipe Réseau désactive node1 (rabbitmq-node1.domain.com)
+ÉTAPE 2 : [TOI] applique changements sur node1 (~3 min)
+ÉTAPE 3 : [TOI] confirme "node1 OK"
+ÉTAPE 4 : Équipe Réseau réactive node1
+ÉTAPE 5 : Attendre 2 minutes
+ÉTAPE 6 : Équipe Réseau désactive node2
+ÉTAPE 7 : [TOI] applique changements sur node2 (~3 min)
+ÉTAPE 8 : [TOI] confirme "node2 OK"
+ÉTAPE 9 : Équipe Réseau réactive node2
+```
+
+---
+
+## Option 5 : Rotation simultanée (NON RECOMMANDÉE)
+
+### Principe
+Redémarrer les 2 nœuds **en même temps** pour minimiser la fenêtre.
+
+### Procédure
+```bash
+# Sur node1 et node2 EN MÊME TEMPS
+systemctl restart rabbitmq-server
+```
+
+### ⚠️ DANGERS
+- ❌ **Perte totale de service** pendant 30-45 secondes
+- ❌ **Risque de split-brain** au redémarrage
+- ❌ **Perte potentielle de messages** si queues non durables
+- ❌ **À éviter absolument** sauf urgence absolue
+
+---
+
+## Ma recommandation selon ton contexte
+
+### Si tes clients gèrent bien les reconnexions
+→ **Option 1** (rotation simple sans LB)
+
+### Si tu veux minimiser l'impact
+→ **Option 2** (iptables) ou **Option 3** (mode maintenance)
+
+### Si tu peux coordonner avec l'équipe réseau
+→ **Option 4** (coordination F5)
+
+### Dans tous les cas
+- ✅ Planifier en dehors des heures de pointe
+- ✅ Prévenir les équipes applicatives
+- ✅ Avoir un plan de rollback
+- ✅ Tester d'abord en pré-production
+
+**L'absence d'accès au F5 rend la rotation moins gracieuse, mais elle reste parfaitement faisable.**
