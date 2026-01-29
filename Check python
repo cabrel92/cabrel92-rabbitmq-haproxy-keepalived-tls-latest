@@ -1,0 +1,372 @@
+# Configuration de Pipenv pour utiliser Python 3.6 sur Windows
+
+Voici comment configurer Pipenv pour pointer spécifiquement vers Python 3.6 alors que Python 3.10 est déjà installé sur votre système Windows 10.
+
+## 1. Vérifier les installations Python
+
+D'abord, identifiez où sont installées vos versions de Python :
+
+```powershell
+# Lister toutes les versions Python via py launcher
+py --list
+# Ou
+py -0
+
+# Output attendu :
+# -V:3.10 *        # Version par défaut (active)
+# -V:3.6
+```
+
+```powershell
+# Vérifier les chemins d'installation
+where python
+where python3.6
+where python3.10
+
+# Ou utiliser py launcher
+py -3.6 --version
+py -3.10 --version
+```
+
+**Chemins typiques :**
+```
+C:\Users\VotreNom\AppData\Local\Programs\Python\Python310\python.exe
+C:\Users\VotreNom\AppData\Local\Programs\Python\Python36\python.exe
+
+# Ou
+C:\Python310\python.exe
+C:\Python36\python.exe
+```
+
+## 2. Méthode 1 : Spécifier la version lors de la création (Recommandée)
+
+### Option A : Utiliser le py launcher
+
+```powershell
+# Naviguer vers votre projet
+cd C:\MonProjet
+
+# Créer l'environnement Pipenv avec Python 3.6
+pipenv --python 3.6
+
+# Ou plus explicite
+pipenv --python py -3.6
+
+# Vérifier la version utilisée
+pipenv --py
+pipenv run python --version
+```
+
+### Option B : Spécifier le chemin complet
+
+```powershell
+# Utiliser le chemin absolu vers python 3.6
+pipenv --python C:\Users\VotreNom\AppData\Local\Programs\Python\Python36\python.exe
+
+# Ou si installé dans C:\Python36
+pipenv --python C:\Python36\python.exe
+```
+
+### Option C : Utiliser une variable d'environnement
+
+```powershell
+# PowerShell
+$env:PIPENV_PYTHON = "C:\Python36\python.exe"
+pipenv install
+
+# CMD
+set PIPENV_PYTHON=C:\Python36\python.exe
+pipenv install
+```
+
+## 3. Méthode 2 : Fichier Pipfile (pour projet existant)
+
+Si vous avez déjà un Pipfile, modifiez-le pour spécifier la version Python :
+
+```toml
+# Pipfile
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+flask = "*"
+
+[dev-packages]
+pytest = "*"
+
+[requires]
+python_version = "3.6"
+# Ou plus flexible
+# python_full_version = "3.6.8"
+```
+
+Ensuite :
+```powershell
+# Supprimer l'environnement existant
+pipenv --rm
+
+# Recréer avec la bonne version
+pipenv install
+```
+
+## 4. Configuration permanente via variables d'environnement
+
+### Pour un projet spécifique (fichier .env)
+
+Créez un fichier `.env` à la racine de votre projet :
+
+```ini
+# .env
+PIPENV_PYTHON=C:\Python36\python.exe
+```
+
+Pipenv chargera automatiquement ce fichier.
+
+### Pour tout le système (Windows)
+
+```powershell
+# PowerShell (administrateur)
+[System.Environment]::SetEnvironmentVariable('PIPENV_PYTHON', 'C:\Python36\python.exe', 'User')
+
+# Ou via l'interface graphique :
+# 1. Windows + Pause → Paramètres système avancés
+# 2. Variables d'environnement
+# 3. Variables utilisateur → Nouveau
+#    Nom : PIPENV_PYTHON
+#    Valeur : C:\Python36\python.exe
+```
+
+## 5. Utiliser py.ini pour configurer le py launcher
+
+Créez ou modifiez le fichier de configuration du py launcher :
+
+```ini
+# C:\Users\VotreNom\AppData\Local\py.ini
+[defaults]
+python=3.6
+
+# Ou spécifier le chemin complet
+# python=C:\Python36\python.exe
+```
+
+Puis utilisez :
+```powershell
+pipenv --python py
+```
+
+## 6. Script PowerShell pour automatiser
+
+Créez un script `setup_pipenv36.ps1` :
+
+```powershell
+# setup_pipenv36.ps1
+param(
+    [string]$ProjectPath = "."
+)
+
+# Chemin vers Python 3.6
+$Python36Path = "C:\Python36\python.exe"
+
+# Vérifier que Python 3.6 existe
+if (-Not (Test-Path $Python36Path)) {
+    Write-Error "Python 3.6 n'est pas installé à $Python36Path"
+    
+    # Essayer de trouver Python 3.6
+    $Python36Path = (py -3.6 -c "import sys; print(sys.executable)" 2>$null)
+    
+    if (-Not $Python36Path) {
+        Write-Error "Impossible de trouver Python 3.6"
+        exit 1
+    }
+}
+
+Write-Host "Python 3.6 trouvé : $Python36Path" -ForegroundColor Green
+
+# Naviguer vers le projet
+Set-Location $ProjectPath
+
+# Supprimer l'environnement existant si présent
+if (Test-Path "Pipfile") {
+    Write-Host "Suppression de l'environnement existant..." -ForegroundColor Yellow
+    pipenv --rm 2>$null
+}
+
+# Créer nouvel environnement avec Python 3.6
+Write-Host "Création de l'environnement Pipenv avec Python 3.6..." -ForegroundColor Cyan
+pipenv --python $Python36Path
+
+# Installer les dépendances
+if (Test-Path "Pipfile") {
+    Write-Host "Installation des dépendances..." -ForegroundColor Cyan
+    pipenv install
+}
+
+# Vérifier la version
+Write-Host "`nVersion Python utilisée :" -ForegroundColor Green
+pipenv run python --version
+
+Write-Host "`nChemin de l'environnement virtuel :" -ForegroundColor Green
+pipenv --venv
+```
+
+Utilisation :
+```powershell
+.\setup_pipenv36.ps1
+# Ou pour un projet spécifique
+.\setup_pipenv36.ps1 -ProjectPath "C:\MesProjets\MonProjet"
+```
+
+## 7. Vérification de la configuration
+
+Une fois configuré, vérifiez que tout fonctionne :
+
+```powershell
+# Vérifier la version Python du virtualenv
+pipenv --py
+# Output: C:\Users\VotreNom\.virtualenvs\monprojet-abc123\Scripts\python.exe
+
+# Vérifier la version Python
+pipenv run python --version
+# Output: Python 3.6.8
+
+# Vérifier le chemin de l'environnement virtuel
+pipenv --venv
+# Output: C:\Users\VotreNom\.virtualenvs\monprojet-abc123
+
+# Vérifier les informations du Pipfile
+pipenv --support
+
+# Ouvrir un shell avec l'environnement activé
+pipenv shell
+python --version  # Devrait afficher 3.6.x
+exit
+```
+
+## 8. Gestion de multiples projets avec différentes versions
+
+```powershell
+# Projet A avec Python 3.6
+cd C:\Projets\ProjetA
+pipenv --python 3.6
+pipenv install requests
+
+# Projet B avec Python 3.10
+cd C:\Projets\ProjetB
+pipenv --python 3.10
+pipenv install flask
+
+# Lister tous les environnements
+pipenv --envs
+```
+
+## 9. Troubleshooting
+
+### Problème : Pipenv utilise toujours Python 3.10
+
+```powershell
+# Solution 1 : Supprimer et recréer
+pipenv --rm
+pipenv --python 3.6
+pipenv install
+
+# Solution 2 : Vérifier PATH
+$env:PATH -split ';' | Select-String -Pattern "Python"
+# Python36 doit apparaître AVANT Python310
+
+# Solution 3 : Utiliser chemin absolu
+pipenv --python "C:\Python36\python.exe"
+```
+
+### Problème : "python 3.6 not found"
+
+```powershell
+# Vérifier l'installation
+py -3.6 --version
+
+# Si erreur, réinstaller Python 3.6 et cocher
+# "Add Python 3.6 to PATH" pendant l'installation
+
+# Ou ajouter manuellement au PATH
+$env:PATH = "C:\Python36;C:\Python36\Scripts;$env:PATH"
+```
+
+### Problème : Conflit de versions
+
+```powershell
+# Lister tous les environnements Pipenv
+pipenv --envs
+
+# Supprimer un environnement spécifique
+pipenv --rm
+
+# Nettoyer tous les environnements non utilisés
+# (attention : cela supprime tous les venvs)
+Remove-Item -Recurse -Force $env:USERPROFILE\.virtualenvs\*
+```
+
+## 10. Configuration optimale recommandée
+
+**Structure de projet :**
+```
+MonProjet/
+├── .env                    # Variables d'environnement locales
+├── Pipfile                 # Dépendances et version Python
+├── Pipfile.lock            # Versions verrouillées
+├── setup_env.ps1           # Script d'initialisation
+└── src/
+    └── main.py
+```
+
+**Fichier .env :**
+```ini
+PIPENV_PYTHON=C:\Python36\python.exe
+PIPENV_VENV_IN_PROJECT=1     # Crée .venv dans le projet
+PIPENV_IGNORE_VIRTUALENVS=1  # Ignore autres venvs
+```
+
+**Fichier Pipfile :**
+```toml
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "~=2.27.0"  # Compatible Python 3.6
+
+[dev-packages]
+pytest = "~=7.0.0"
+
+[requires]
+python_version = "3.6"
+
+[scripts]
+start = "python src/main.py"
+test = "pytest"
+```
+
+**Commandes courantes :**
+```powershell
+# Installation initiale
+pipenv install --python 3.6
+
+# Ajouter un paquet
+pipenv install numpy
+
+# Ajouter un paquet de développement
+pipenv install --dev black
+
+# Exécuter un script
+pipenv run python src/main.py
+
+# Ou utiliser les scripts définis
+pipenv run start
+
+# Activer le shell
+pipenv shell
+```
+
+Avec cette configuration, Pipenv utilisera toujours Python 3.6 pour votre projet, indépendamment de la version par défaut du système !
