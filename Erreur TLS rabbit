@@ -1,0 +1,604 @@
+Dans un cluster RabbitMQ, la communication inter-nœuds (internode) est contrôlée par le **protocole de distribution Erlang** (utilisé par défaut) ou par un protocole alternatif comme **inter-node TLS**.
+
+Voici comment désactiver le TLS sur la communication internode :
+
+---
+
+## 1. Via le fichier de configuration `rabbitmq.conf`
+
+C'est la méthode recommandée. Dans le fichier `rabbitmq.conf` (situé généralement dans `/etc/rabbitmq/` sur Linux), vous pouvez contrôler le protocole internode avec ces paramètres :
+
+```ini
+# Désactiver TLS pour la communication internode
+inter_node_tls.enabled = false
+```
+
+Si cette directive existe déjà avec `true`, changez-la en `false`. Si elle n'existe pas, elle est déjà à `false` par défaut.
+
+---
+
+## 2. Via le fichier `advanced.config` (syntaxe Erlang)
+
+Si vous utilisez le fichier `advanced.config`, la syntaxe sera différente :
+
+```erlang
+[
+  {rabbit, [
+    {inter_node_tls_enabled, false}
+  ]}
+].
+```
+
+---
+
+## 3. Vérifier la configuration actuelle
+
+Avant de modifier quoi que ce soit, vous pouvez vérifier l'état actuel avec la commande CLI :
+
+```bash
+rabbitmqctl status
+```
+
+Dans la sortie, regardez la section liée aux **listeners** et à la configuration réseau pour voir si TLS est activé sur les ports internode (par défaut **5671** pour TLS, **5672** sans TLS pour les clients, et **25672** pour la communication internode).
+
+---
+
+## 4. Redémarrer le nœud
+
+Après modification du fichier de configuration, il faut redémarrer le service :
+
+```bash
+# systemd
+sudo systemctl restart rabbitmq-server
+
+# ou manuellement
+sudo rabbitmqctl stop
+sudo rabbitmqctl start
+```
+
+---
+
+## Points importants à retenir
+
+**Cohérence du cluster** : tous les nœuds du cluster doivent avoir la même configuration. Si un nœud attend du TLS et qu'un autre n'en fait pas, la communication internode échouera et le cluster sera cassé. Changez donc la configuration sur tous les nœuds avant de redémarrer.
+
+**Ordre de mise à jour** : dans un cluster en production, il est conseillé de faire une mise à jour glissante (rolling update) — redémarrer un nœud à la fois — plutôt que de tout redémarrer en même temps, pour minimiser les interruptions.
+
+**Sécurité** : désactiver le TLS internode expose la communication entre nœuds à des risques d'interception si le réseau n'est pas isolé. Ne faites cela que si vous êtes dans un environnement contrôlé (réseau interne, conteneurs isolés, etc.).
+
+
+
+
+Bon point. Si vous avez un fichier de configuration dédié à l'internode TLS (souvent appelé `internode.conf` ou référencé dans votre `rabbitmq.conf`), voici comment gérer proprement la transition.
+
+---
+
+## 1. Identifier votre fichier de configuration internode
+
+Le fichier est généralement référencé comme ça dans `rabbitmq.conf` :
+
+```ini
+include.1 = /etc/rabbitmq/internode.conf
+```
+
+Ou parfois via une variable d'environnement dans `rabbitmq-env.conf` :
+
+```bash
+RABBITMQ_CONF_FILES="/etc/rabbitmq/rabbitmq.conf /etc/rabbitmq/internode.conf"
+```
+
+Vérifiez d'abord où se trouve ce fichier :
+
+```bash
+find /etc/rabbitmq -type f -name "*.conf"
+cat /etc/rabbitmq/rabbitmq-env.conf
+```
+
+---
+
+## 2. Contenu typique du fichier `internode.conf`
+
+Un fichier internode avec TLS ressemble généralement à ça :
+
+```ini
+inter_node_tls.enabled = true
+
+inter_node_tls.keyfile = /path/to/internode/server.key
+inter_node_tls.certfile = /path/to/internode/server.crt
+inter_node_tls.cacertfile = /path/to/internode/ca.crt
+
+inter_node_tls.verify = peer
+inter_node_tls.fail_if_not_peer_cert = true
+```
+
+---
+
+## 3. Désactiver le TLS internode
+
+Vous avez deux options :
+
+**Option A — Modifier le fichier directement** (approche la plus propre) :
+
+```ini
+inter_node_tls.enabled = false
+
+# Vous pouvez commenter ou laisser les chemins de certificats,
+# ils ne seront plus utilisés tant que enabled = false
+# inter_node_tls.keyfile = /path/to/internode/server.key
+# inter_node_tls.certfile = /path/to/internode/server.crt
+# inter_node_tls.cacertfile = /path/to/internode/ca.crt
+# inter_node_tls.verify = peer
+# inter_node_tls.fail_if_not_peer_cert = true
+```
+
+**Option B — Supprimer la référence au fichier** dans `rabbitmq.conf` :
+
+```ini
+# Commentez ou supprimez cette ligne
+# include.1 = /etc/rabbitmq/internode.conf
+```
+
+Cette option est plus risquée car si d'autres paramètres sont dans ce fichier, ils seront aussi perdus.
+
+---
+
+## 4. Vérifier avant de redémarrer
+
+Avant tout changement, confirmez la configuration actuelle sur chaque nœud :
+
+```bash
+rabbitmqctl show_config
+```
+
+Cherchez les blocs liés à `inter_node_tls` dans la sortie pour avoir une vision claire de ce qui est actif.
+
+---
+
+## 5. Appliquer le changement sur le cluster (rolling update)
+
+C'est la partie la plus critique. Le bon ordre est :
+
+```bash
+# Sur chaque nœud, UN PAR UN :
+
+# 1. Mettre le nœud en mode maintenance (il cède ses files à ses pairs)
+rabbitmqctl set_maintenance_mode true
+
+# 2. Arrêter le service
+sudo systemctl stop rabbitmq-server
+
+# 3. Modifier le fichier internode.conf (inter_node_tls.enabled = false)
+
+# 4. Redémarrer le service
+sudo systemctl start rabbitmq-server
+
+# 5. Attendre que le nœud rejoint le cluster
+rabbitmqctl status
+
+# 6. Quitter le mode maintenance
+rabbitmqctl set_maintenance_mode false
+
+# Répéter sur le prochain nœud seulement après que celui-ci est stable
+```
+
+---
+
+## 6. Valider après la migration
+
+Une fois tous les nœuds redémarrés :
+
+```bash
+# Vérifier que le cluster est sain
+rabbitmqctl cluster_info
+
+# Vérifier que TLS internode est bien désactivé
+rabbitmqctl show_config | grep inter_node_tls
+```
+
+Dans la sortie, vous devriez voir `inter_node_tls.enabled = false` (ou la clé absente, ce qui signifie `false` par défaut).
+
+---
+
+Le point clé à retenir : ne jamais redémarrer deux nœuds en même temps lors de ce changement. Si un nœud attend du TLS et qu'un autre ne l'attend plus, ils ne pourront pas se communiquer et le cluster se fragmente.
+
+
+Voici les principales erreurs que vous pouvez rencontrer liées à des certificats TLS mal configurés dans un cluster RabbitMQ, ainsi que comment les identifier.
+
+---
+
+## Erreurs dans les logs RabbitMQ
+
+Ces erreurs apparaissent dans `/var/log/rabbitmq/rabbitmq@<hostname>.log` :
+
+**Erreur de poignée de main TLS (handshake)**
+
+```
+TLS handshake failed: ...
+reason: handshake_failure
+```
+
+Cette erreur signifie que les deux côtés ne peuvent pas établir une connexion sécurisée. Les causes sont généralement un certificat expiré, un certificat non signé par la même CA, ou un incompatibilité de protocole TLS.
+
+**Certificat non vérifié (peer not verified)**
+
+```
+TLS handshake failed: ...
+reason: {tls_alert, bad_certificate}
+```
+
+Cela arrive quand `verify = peer` est activé mais que le certificat présenté par l'autre nœud ne correspond pas à la CA attendue.
+
+**Fichier certificat introuvable ou illisible**
+
+```
+Error: Could not open file '/path/to/server.crt': No such file or directory
+```
+
+Le chemin dans votre configuration pointe vers un fichier qui n'existe pas ou qui n'a pas les bons droits de lecture pour l'utilisateur `rabbitmq`.
+
+**Clé privée incompatible avec le certificat**
+
+```
+TLS handshake failed: ...
+reason: {tls_alert, decrypt_error}
+```
+
+La clé privée (`server.key`) ne correspond pas au certificat public (`server.crt`). Ils n'ont pas été générés ensemble ou l'un des deux a été remplacé séparément.
+
+**Certificat expiré**
+
+```
+TLS handshake failed: ...
+reason: {tls_alert, certificate_expired}
+```
+
+Le certificat utilisé a dépassé sa date de validité.
+
+---
+
+## Erreurs de communication internode
+
+Ces erreurs sont liées spécifiquement à la communication entre nœuds du cluster :
+
+**Nœud incapable de se connecter à un pair**
+
+```
+Error connecting to node rabbit@node2: nodedown
+```
+
+Si TLS est activé sur un côté et pas sur l'autre, ou si les certificats ne correspondent pas entre nœuds, la connexion internode échoue et le nœud apparaît comme `down`.
+
+**Cluster partitionné**
+
+```
+Warning: Network partition detected
+Partitions: [[rabbit@node1], [rabbit@node2, rabbit@node3]]
+```
+
+Une partition réseau peut être causée par un échec de TLS internode. Si les nœuds ne peuvent plus se parler à cause d'un certificat invalide, RabbitMQ interprète ça comme une perte réseau.
+
+---
+
+## Erreurs côté client
+
+```
+Error: (ConnectionError) Connection refused: [Errno 111] Connection refused
+```
+
+ou
+
+```
+Error: AMQPConnectionError: (504) Reason: "Channel.close(504, "Not Found: (404) NOT_FOUND")"
+```
+
+Ces erreurs apparaissent quand un client essaie de se connecter via le port TLS (`5671`) mais que le certificat du serveur n'est pas validé côté client, ou que le client n'a pas la bonne CA dans sa configuration.
+
+---
+
+## Comment diagnostiquer rapidement
+
+Pour vérifier la validité d'un certificat sans même toucher à RabbitMQ :
+
+```bash
+# Voir les détails du certificat (date d'expiration, sujet, émetteur)
+openssl x509 -in /path/to/server.crt -text -noout
+
+# Vérifier que la clé privée correspond au certificat
+openssl rsa -in /path/to/server.key -check -noout
+openssl x509 -in /path/to/server.crt -noout -modulus | md5sum
+openssl rsa -in /path/to/server.key -noout -modulus | md5sum
+# Si les deux md5sum sont identiques, la clé correspond au certificat
+
+# Vérifier que le certificat est bien signé par la CA attendue
+openssl verify -CAfile /path/to/ca.crt /path/to/server.crt
+
+# Tester la connexion TLS directement sur le port internode
+openssl s_client -connect <hostname>:25671 -CAfile /path/to/ca.crt
+```
+
+---
+
+## Vérifier les droits fichier
+
+Une cause très fréquente et souvent oubliée : les fichiers de certificats ne sont pas lisibles par l'utilisateur qui exécute RabbitMQ.
+
+```bash
+# L'utilisateur rabbitmq doit pouvoir lire ces fichiers
+ls -la /path/to/internode/
+sudo chown rabbitmq:rabbitmq /path/to/internode/*
+sudo chmod 640 /path/to/internode/*
+```
+
+---
+
+## Récapitulatif rapide
+
+| Erreur | Cause la plus probable |
+|---|---|
+| `handshake_failure` | Certificat expiré ou CA incompatible |
+| `bad_certificate` | Certificat non signé par la CA attendue |
+| `decrypt_error` | Clé privée ne correspond pas au certificat |
+| `certificate_expired` | Date d'expiration dépassée |
+| `nodedown` | TLS activé d'un côté seulement, ou certificat invalide entre nœuds |
+| `Network partition` | Échec silencieux de communication internode |
+| `Connection refused` | Port TLS fermé ou certificat non validé côté client |
+
+Dans la grande majorité des cas, un bon diagnostic commence par vérifier les logs du nœud concerné et par les commandes `openssl` ci-dessus, qui permettent de confirmer ou éliminer chaque cause sans toucher à la configuration.
+
+
+
+
+
+
+
+Oui, c'est un problème réel et fondamental. Voici pourquoi.
+
+---
+
+## Comment ça fonctionne en pratique
+
+Un certificat TLS fonctionne sur un principe de paire cryptographique. La clé privée et le certificat public sont mathématiquement liés l'un à l'autre au moment de leur génération. La clé privée génère une signature unique, et le certificat public contient la clé publique correspondante qui permet de vérifier cette signature.
+
+Si vous utilisez une clé privée qui n'a pas été générée en même temps que le certificat, cette relation mathématique n'existe pas. Le serveur ne pourra pas prouver qu'il possède le certificat qu'il présente, et la connexion échouera systématiquement.
+
+---
+
+## Comment vérifier si votre paire est cohérente
+
+Cette commande est la plus fiable. Elle extrait le modulus de chaque fichier et vous permet de les comparer :
+
+```bash
+# Extraire le modulus du certificat public
+openssl x509 -in server.crt -noout -modulus | md5sum
+
+# Extraire le modulus de la clé privée
+openssl rsa -in server.key -noout -modulus | md5sum
+```
+
+Si les deux hash `md5sum` sont identiques, la paire est cohérente. Si ils diffèrent, ils n'ont pas été générés ensemble et vous avez un problème.
+
+---
+
+## Comment regénérer une paire cohérente
+
+Si vous confirmez que la paire est incohérente, vous devez en regénérer une complète. Voici le processus standard :
+
+```bash
+# 1. Générer une nouvelle clé privée
+openssl genrsa -out server.key 2048
+
+# 2. Créer une demande de certificat (CSR) à partir de cette clé
+openssl req -new -key server.key -out server.csr -subj "/CN=rabbitmq-node1"
+
+# 3. Signer le certificat avec votre CA
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out server.crt -days 3650
+```
+
+Dans ce cas, `server.key` et `server.crt` sont garantis d'être cohérents car le CSR a été créé à partir de la même clé privée.
+
+---
+
+## Cas particulier : certificat fourni par une CA externe
+
+Si votre entreprise a une CA interne ou que vous utilisez une CA externe (comme Let's Encrypt), vous ne générez pas vous-même le certificat final. Dans ce cas le bon ordre est toujours le même : vous créez d'abord la clé privée, puis vous en déduis le CSR, et c'est la CA qui signe et retourne le certificat. La clé privée reste toujours le point de départ, elle ne doit jamais être générée séparément après le fait.
+
+---
+
+## En résumé
+
+La clé privée et le certificat public ne sont pas deux fichiers indépendants que vous pouvez mélanger librement. Ils forment une paire inseparable depuis leur génération. Si vous n'avez pas la clé privée d'origine qui correspond à votre certificat, la seule solution est de regénérer les deux ensemble.
+
+
+
+
+
+Non, le fait que la génération ait été faite sur le même serveur n'a aucune importance. Ce qui compte, c'est uniquement que la clé privée et le certificat aient été générés à partir de la même commande de génération, peu importe où cette génération a eu lieu.
+
+Le serveur n'est qu'un environnement d'exécution. La relation entre la clé et le certificat est purement mathématique et ne dépend d'aucun facteur lié à la machine.
+
+---
+
+## Les scénarios qui causent le problème
+
+Même sur le même serveur, ces situations créent une incompatibilité :
+
+**Vous avez regénéré la clé privée après avoir déjà créé le certificat.** Par exemple, vous avez fait une nouvelle `openssl genrsa` pour créer une nouvelle `server.key`, mais vous avez gardé l'ancien `server.crt`. Le certificat reste lié à l'ancienne clé qui n'existe plus.
+
+**Vous avez renouvelé le certificat sans renouveler la clé.** Vous avez envoyé un nouveau CSR signé par une ancienne clé, puis la CA a retourné un nouveau certificat, mais entre-temps vous avez remplacé la clé privée.
+
+**Vous avez copié un certificat d'un autre nœud.** Dans un cluster, chaque nœud doit avoir sa propre paire clé/certificat. Si vous copiez le `server.crt` d'un nœud vers un autre sans copier aussi la clé privée correspondante, la paire sera incohérente.
+
+---
+
+## Comment le vérifier rapidement
+
+Cette commande reste toujours la même, peu importe le serveur :
+
+```bash
+# Sur le serveur en question, comparez les deux modulus
+openssl x509 -in /path/to/server.crt -noout -modulus | md5sum
+openssl rsa -in /path/to/server.key -noout -modulus | md5sum
+```
+
+Si les deux hash sont différents, peu importe que vous soyez sur le même serveur depuis le début, la paire n'est pas cohérente et il faut la regénérer.
+
+---
+
+En court, la question n'est jamais "sur quel serveur ont été générés ces fichiers", mais plutôt "ont-ils été générés à partir de la même opération de génération de clé". C'est le seul critère qui compte.
+
+
+
+Si vous avez le même modulus entre la clé privée et le certificat, alors votre paire est cohérente et le problème ne vient pas de là.
+
+Dans ce cas, vous devez chercher ailleurs. Voici les autres causes les plus probables à investiguer :
+
+---
+
+## La CA qui a signé le certificat
+
+Le problème peut venir du fichier `ca.crt` utilisé pour la vérification. Vérifiez que le certificat a bien été signé par la CA que vous utilisez :
+
+```bash
+openssl verify -CAfile /path/to/ca.crt /path/to/server.crt
+```
+
+Si la sortie retourne `OK`, la CA est bonne. Sinon vous verrez une erreur comme `unable to get local issuer certificate`, ce qui signifie que le `ca.crt` utilisé ne correspond pas à celui qui a signé votre certificat.
+
+---
+
+## Les permissions sur les fichiers
+
+Comme mentionné plus tôt, c'est une cause très fréquente. L'utilisateur `rabbitmq` doit pouvoir lire tous les fichiers :
+
+```bash
+ls -la /path/to/internode/
+
+# Si les permissions ne sont pas correctes
+sudo chown rabbitmq:rabbitmq /path/to/internode/*
+sudo chmod 640 /path/to/internode/*
+```
+
+---
+
+## La cohérence entre les nœuds du cluster
+
+Dans un cluster, tous les nœuds doivent utiliser la même CA pour se vérifier mutuellement. Vérifiez que chaque nœud utilise bien le même `ca.crt` :
+
+```bash
+# Sur chaque nœud, comparez le hash du fichier CA
+md5sum /path/to/ca.crt
+```
+
+Si les hash diffèrent entre nœuds, un nœud ne pourra pas vérifier le certificat d'un autre.
+
+---
+
+## Le certificat lui-même
+
+Vérifiez sa date d'expiration et ses détails :
+
+```bash
+openssl x509 -in /path/to/server.crt -text -noout
+```
+
+Regardez particulièrement ces champs dans la sortie :
+
+```
+Not Before: ...   # Date de début de validité
+Not After:  ...   # Date d'expiration
+
+Subject: CN = ...           # Le nom du nœud
+Issuer:   CN = ...          # La CA qui a signé
+```
+
+Le `Subject` doit correspondre au nom de réseau du nœud, sinon la vérification peut échouer selon la configuration.
+
+---
+
+## La configuration RabbitMQ elle-même
+
+Relisez votre fichier `internode.conf` et vérifiez que les chemins pointent bien vers les bons fichiers :
+
+```bash
+cat /etc/rabbitmq/internode.conf
+```
+
+Une erreur de chemin très discrète, comme un espace supplémentaire ou une faute de frappe, peut causer un échec silencieux.
+
+---
+
+En résumé, puisque le modulus est identique, votre clé et votre certificat sont bien formés ensemble. Le problème se trouve donc ailleurs : la CA, les permissions, la cohérence entre nœuds, ou la configuration elle-même. Les commandes ci-dessus devraient vous permettre de pointer vers la vraie cause.
+
+
+
+
+Pas nécessairement. `decrypt_error` peut être causé par un certificat incompatible, mais ce n'est pas la seule cause. Puisque votre modulus est identique, votre paire clé/certificat est cohérente, donc le problème vient d'ailleurs.
+
+---
+
+## Les autres causes possibles de `decrypt_error`
+
+**Version de TLS incompatible entre les nœuds.** Si un nœud force TLS 1.3 et qu'un autre ne supporte que TLS 1.2, la négociation échoue avec cette erreur. Vérifiez la configuration sur chaque nœud :
+
+```ini
+# Dans votre internode.conf
+inter_node_tls.versions = tlsv1.2
+```
+
+Assurez-vous que cette valeur est identique sur tous les nœuds.
+
+**Algorithmes de chiffrement (cipher suites) incompatibles.** Même si les versions de TLS correspondent, les algorithmes utilisés pour chiffrer les données doivent aussi être compatibles entre les nœuds :
+
+```ini
+inter_node_tls.ciphers = ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256
+```
+
+Là encore, cette liste doit être cohérente entre tous les nœuds.
+
+**Format de la clé privée incompatible.** Même si le modulus correspond, la clé privée peut être dans un format que RabbitMQ ne reconnaît pas. Vérifiez son format :
+
+```bash
+openssl rsa -in /path/to/server.key -check -noout
+```
+
+Si la sortie retourne `RSA key ok`, le format est bon. Sinon vous verrez une erreur explicite.
+
+**Fichier de clé privée corrompu.** Un fichier qui a été copié partiellement ou mal encodé peut causer ce type d'erreur même si le modulus semble correct à première vue :
+
+```bash
+# Vérifier l'intégrité du fichier
+openssl rsa -in /path/to/server.key -noout
+```
+
+Si cette commande ne retourne rien sans erreur, le fichier est intègre.
+
+---
+
+## Comment confirmer la vraie cause
+
+Cette commande permet de tester directement la connexion TLS vers le port internode et vous donnera une sortie détaillée sur ce qui échoue exactement :
+
+```bash
+openssl s_client -connect <hostname>:25671 \
+  -cert /path/to/server.crt \
+  -key /path/to/server.key \
+  -CAfile /path/to/ca.crt \
+  -tls1_2
+```
+
+Dans la sortie, regardez particulièrement ces parties :
+
+```
+SSL-Session:
+    Protocol  : TLSv1.2
+    Cipher    : ECDHE-RSA-AES256-GCM-SHA384
+    ...
+verify return:1   # 1 = OK, 0 = échec
+```
+
+Si la connexion échoue ici, vous aurez un message explicite sur la vraie cause, que ce soit la version de TLS, le cipher, ou autre chose.
+
+---
+
+En court, `decrypt_error` est un symptôme qui peut avoir plusieurs origines. Puisque votre modulus est bon, concentrez-vous d'abord sur la version de TLS et les cipher suites entre vos nœuds, puis utilisez la commande `openssl s_client` pour pincer la vraie cause.
