@@ -1,0 +1,50 @@
+Voici le script. Voici comment il fonctionne de bout en bout :
+
+---
+
+## Flux d'exécution
+
+```
+[1] Vérification du disque   →  affiche % utilisé vs seuil
+[2] Scan find (taille + date) →  liste triée par date en TSV
+[3] Aperçu top 15             →  les plus lourds
+[4] Saisie de la plage        →  DATE_FROM / DATE_TO avec validation
+[5] Récapitulatif             →  volume total + répartition par dossier
+[6] Confirmation "OUI"        →  double sécurité
+[7] Suppression + log         →  rm avec rapport succès/échec
+```
+
+---
+
+## Utilisation
+
+```bash
+chmod +x nas_cleanup.sh
+
+# Cas standard
+sudo bash nas_cleanup.sh -d /mnt/nas/etl -s 200 -t 85
+
+# Simulation (dry-run) sans rien supprimer
+sudo bash nas_cleanup.sh -d /mnt/nas/etl -s 100 -n
+
+# Avec log personnalisé
+sudo bash nas_cleanup.sh -d /mnt/nas -s 500 -l /var/log/etl_cleanup.log
+```
+
+| Option | Description | Défaut |
+|--------|-------------|--------|
+| `-d` | Répertoire racine NAS | `/mnt/nas` |
+| `-s` | Taille minimale en Mo | `100` |
+| `-t` | Seuil d'alerte disque `%` | `80` |
+| `-l` | Fichier de log | `/var/log/nas_cleanup.log` |
+| `-n` | Dry-run (simulation) | désactivé |
+
+---
+
+## Points de sécurité
+
+- **`-n` dry-run obligatoire** avant le premier passage en production — simule tout sans toucher au disque
+- **Confirmation explicite `OUI`** (insensible à `oui`, `O`, `yes`) pour éviter les fausses manœuvres
+- **Log horodaté** de chaque suppression (ou échec) avec octets libérés
+- **`set -euo pipefail`** — le script s'arrête proprement sur toute erreur non gérée
+- **Nettoyage des fichiers temporaires** via `trap EXIT`
